@@ -1,0 +1,1900 @@
+<!DOCTYPE html>
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+<html class="theme-next gemini use-motion" lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2"/>
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+  
+  
+    
+    
+  <script src="/lib/pace/pace.min.js?v=1.0.2"></script>
+  <link href="/lib/pace/pace-theme-center-circle.min.css?v=1.0.2" rel="stylesheet">
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css" />
+
+<link href="/css/main.css?v=6.5.0" rel="stylesheet" type="text/css" />
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=6.5.0">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/ico32x32.png?v=6.5.0">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/ico16x16.png?v=6.5.0">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=6.5.0" color="#222">
+
+
+
+
+
+
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Gemini',
+    version: '6.5.0',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":true,"scrollpercent":true,"onmobile":false},
+    fancybox: false,
+    fastclick: false,
+    lazyload: false,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+  
+
+
+
+
+  <meta name="description" content="开篇&amp;emsp;&amp;emsp;相信大家都用过事务以及了解他的特点，如原子性(Atomicity),一致性(Consistency),隔离型(Isolation)以及持久性(Durability)等。今天想跟大家一起研究下事务内部到底是怎么实现的，在讲解前我想先抛出个问题：事务想要做到什么效果？ &amp;emsp;&amp;emsp;按我理解，无非是要做到可靠性以及并发处理  可靠性：数据库要保证当insert或u">
+<meta property="og:type" content="article">
+<meta property="og:title" content="mysql 事务的实现原理">
+<meta property="og:url" content="https://wicherqaq.github.io/2020/04/20/mysql-%E4%BA%8B%E5%8A%A1%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/index.html">
+<meta property="og:site_name" content="TIME IN PIECE">
+<meta property="og:description" content="开篇&amp;emsp;&amp;emsp;相信大家都用过事务以及了解他的特点，如原子性(Atomicity),一致性(Consistency),隔离型(Isolation)以及持久性(Durability)等。今天想跟大家一起研究下事务内部到底是怎么实现的，在讲解前我想先抛出个问题：事务想要做到什么效果？ &amp;emsp;&amp;emsp;按我理解，无非是要做到可靠性以及并发处理  可靠性：数据库要保证当insert或u">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2ff3e4c3b8b46?w=2368&h=788&f=png&s=226339">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2fdae04c7dc6f?w=4016&h=1892&f=png&s=1010471">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2fe552145e2c1?w=4652&h=1848&f=png&s=867671">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/17/16a27696def80b5f?w=416&h=183&f=png&s=16219">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2f5e3c3950ca1?w=3612&h=1512&f=png&s=816439">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2fe331bab111c?w=4652&h=1848&f=png&s=867671">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2fe2457ff3820?w=1904&h=744&f=png&s=319469">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2fece4894a8a8?w=3748&h=1100&f=png&s=475112">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/17/16a26f9acf011739?w=994&h=373&f=png&s=120202">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2c1c8b5285ee3?w=688&h=233&f=png&s=40492">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2ed4dbd348a68?w=4284&h=1288&f=png&s=731191">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2f05d63f388d0?w=3612&h=1512&f=png&s=816439">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2c351eb03fc24?w=1082&h=290&f=png&s=120400">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2f054474b394b?w=3584&h=1512&f=png&s=756027">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2f56d34ff739e?w=3528&h=1060&f=png&s=414467">
+<meta property="og:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2f69776d551b3?w=2608&h=776&f=png&s=445068">
+<meta property="article:published_time" content="2020-04-20T06:55:09.000Z">
+<meta property="article:modified_time" content="2020-04-20T07:25:46.000Z">
+<meta property="article:author" content="wicherQAQ">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://user-gold-cdn.xitu.io/2019/4/18/16a2ff3e4c3b8b46?w=2368&h=788&f=png&s=226339">
+
+
+  
+
+
+  <link rel="alternate" href="/atom.xml" title="TIME IN PIECE" type="application/atom+xml" />
+
+
+
+
+  <link rel="canonical" href="https://wicherqaq.github.io/2020/04/20/mysql-事务的实现原理/"/>
+
+
+
+<script type="text/javascript" id="page.configurations">
+  CONFIG.page = {
+    sidebar: "",
+  };
+</script>
+
+  <title>mysql 事务的实现原理 | TIME IN PIECE</title>
+  
+
+
+
+
+
+
+
+
+
+
+
+  <noscript>
+  <style type="text/css">
+    .use-motion .motion-element,
+    .use-motion .brand,
+    .use-motion .menu-item,
+    .sidebar-inner,
+    .use-motion .post-block,
+    .use-motion .pagination,
+    .use-motion .comments,
+    .use-motion .post-header,
+    .use-motion .post-body,
+    .use-motion .collection-title { opacity: initial; }
+
+    .use-motion .logo,
+    .use-motion .site-title,
+    .use-motion .site-subtitle {
+      opacity: initial;
+      top: initial;
+    }
+
+    .use-motion {
+      .logo-line-before i { left: initial; }
+      .logo-line-after i { right: initial; }
+    }
+  </style>
+</noscript>
+
+<meta name="generator" content="Hexo 4.2.1"></head>
+
+<body itemscope itemtype="http://schema.org/WebPage" lang="zh-CN">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+	<a href="https://github.com/wicherQAQ" target="_blank" rel="noopener" class="github-corner" aria-label="View source on GitHub"><svg width="80" height="80" viewBox="0 0 250 250" style="fill:#70B7FD; color:#fff; position: absolute; top: 0; border: 0; right: 0;" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+
+    <header id="header" class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">TIME IN PIECE</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+    
+      
+        <p class="site-subtitle">I MUST ASSEMBL THEM</p>
+      
+    
+  </div>
+
+  <div class="site-nav-toggle">
+    <button aria-label="切换导航栏">
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  
+    <ul id="menu" class="menu">
+      
+        
+        
+        
+          
+          <li class="menu-item menu-item-home">
+    <a href="/" rel="section">
+      <i class="menu-item-icon fa fa-fw fa-home"></i> <br />首页</a>
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-about">
+    <a href="/about/" rel="section">
+      <i class="menu-item-icon fa fa-fw fa-user"></i> <br />关于</a>
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-tags">
+    <a href="/tags/" rel="section">
+      <i class="menu-item-icon fa fa-fw fa-tags"></i> <br />标签</a>
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-categories">
+    <a href="/categories/" rel="section">
+      <i class="menu-item-icon fa fa-fw fa-th"></i> <br />分类</a>
+  </li>
+        
+        
+        
+          
+          <li class="menu-item menu-item-archives">
+    <a href="/archives/" rel="section">
+      <i class="menu-item-icon fa fa-fw fa-question-circle"></i> <br />归档</a>
+  </li>
+
+      
+      
+        <li class="menu-item menu-item-search">
+          
+            <a href="javascript:;" class="popup-trigger">
+          
+            
+              <i class="menu-item-icon fa fa-search fa-fw"></i> <br />搜索</a>
+        </li>
+      
+    </ul>
+  
+
+  
+
+  
+    <div class="site-search">
+      
+  <div class="popup search-popup local-search-popup">
+  <div class="local-search-header clearfix">
+    <span class="search-icon">
+      <i class="fa fa-search"></i>
+    </span>
+    <span class="popup-btn-close">
+      <i class="fa fa-times-circle"></i>
+    </span>
+    <div class="local-search-input-wrapper">
+      <input autocomplete="off"
+             placeholder="搜索..." spellcheck="false"
+             type="text" id="local-search-input">
+    </div>
+  </div>
+  <div id="local-search-result"></div>
+</div>
+
+
+
+    </div>
+  
+</nav>
+
+
+
+  
+
+
+
+</div>
+    </header>
+
+    
+
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+            
+
+          
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  
+
+  <article class="post post-type-normal" itemscope itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="https://wicherqaq.github.io/2020/04/20/mysql-%E4%BA%8B%E5%8A%A1%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="wicherQAQ">
+      <meta itemprop="description" content="阻塞/非阻塞式依据-进程是否需要等待执行结果">
+      <meta itemprop="image" content="/images/touxiang.jpg">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="TIME IN PIECE">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">mysql 事务的实现原理
+              
+            
+          </h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+
+            
+            
+            
+
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+
+              
+                
+              
+
+              <time title="创建时间：2020-04-20 14:55:09" itemprop="dateCreated datePublished" datetime="2020-04-20T14:55:09+08:00">2020-04-20</time>
+            
+
+            
+          </span>
+
+          
+            <span class="post-category" >
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing"><a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a></span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+              <span class="post-comments-count">
+                <span class="post-meta-divider">|</span>
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-comment-o"></i>
+                </span>
+                <a href="/2020/04/20/mysql-%E4%BA%8B%E5%8A%A1%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/#comments" itemprop="discussionUrl">
+                  <span class="post-meta-item-text">评论数：</span> <span class="post-comments-count valine-comment-count" data-xid="/2020/04/20/mysql-%E4%BA%8B%E5%8A%A1%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/" itemprop="commentCount"></span>
+                </a>
+              </span>
+            
+          
+
+          
+          
+             <span id="/2020/04/20/mysql-%E4%BA%8B%E5%8A%A1%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/" class="leancloud_visitors" data-flag-title="mysql 事务的实现原理">
+               <span class="post-meta-divider">|</span>
+               <span class="post-meta-item-icon">
+                 <i class="fa fa-eye"></i>
+               </span>
+               
+                 <span class="post-meta-item-text">热度：</span>
+               
+                 <span class="leancloud-visitors-count"></span>
+				 <span>℃</span>
+             </span>
+          
+
+          
+
+          
+            <div class="post-symbolscount">
+              
+
+              
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-file-word-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">本文字数：</span>
+                
+                <span title="本文字数">12k</span>
+              
+
+              
+                <span class="post-meta-divider">|</span>
+              
+
+              
+                <span class="post-meta-item-icon">
+                  <i class="fa fa-clock-o"></i>
+                </span>
+                
+                  <span class="post-meta-item-text">阅读时长 &asymp;</span>
+                
+                <span title="阅读时长">11 分钟</span>
+              
+            </div>
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h3 id="开篇"><a href="#开篇" class="headerlink" title="开篇"></a>开篇</h3><p>&emsp;&emsp;相信大家都用过事务以及了解他的特点，如原子性(Atomicity),一致性(Consistency),隔离型(Isolation)以及持久性(Durability)等。今天想跟大家一起研究下事务内部到底是怎么实现的，在讲解前我想先抛出个问题：<br><strong>事务想要做到什么效果？</strong></p>
+<p>&emsp;&emsp;按我理解，无非是要做到<strong>可靠性</strong>以及<strong>并发处理</strong></p>
+<ul>
+<li><p>可靠性：数据库要保证当insert或update操作时抛异常或者数据库crash的时候需要保障数据的操作前后的一致，想要做到这个，我需要知道我修改之前和修改之后的状态，所以就有了undo log和redo log。</p>
+</li>
+<li><p>并发处理：也就是说当多个并发请求过来，并且其中有一个请求是对数据修改操作的时候会有影响，为了避免读到脏数据，所以需要对事务之间的<strong>读写进行隔离</strong>，至于隔离到啥程度得看业务系统的场景了，实现这个就得用MySQL 的隔离级别。</p>
+</li>
+</ul>
+<p>&emsp;&emsp;下面我首先讲实现事务功能的三个技术，分别是日志文件(redo和undo)，锁技术以及MVCC，然后再讲事务的实现原理，包括原子性是怎么实现的，隔离型是怎么实现的等等。最后在做一个总结，希望大家能够耐心看完</p>
+<h3 id="redo与-undo介绍"><a href="#redo与-undo介绍" class="headerlink" title="redo与 undo介绍"></a>redo与 undo介绍</h3><h4 id="1-redo-log"><a href="#1-redo-log" class="headerlink" title="1. redo log"></a>1. redo log</h4><p><strong>什么是redo log ?</strong></p>
+<p>redo log叫做<strong>重做</strong>日志，是用来实现事务的持久性。该日志文件由两部分组成：重做日志缓冲（redo log buffer）以及重做日志文件（redo log）,前者是在内存中，后者在磁盘中。当<strong>事务提交之后</strong>会把所有修改信息都会存到该日志中。</p>
+<p><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2ff3e4c3b8b46?w=2368&h=788&f=png&s=226339" alt="img"></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">start transaction;</span><br><span class="line">select balance from bank where name&#x3D;&quot;zhangsan&quot;;</span><br><span class="line">&#x2F;&#x2F; 生成 重做日志 balance&#x3D;600</span><br><span class="line">update bank set balance &#x3D; balance - 400; </span><br><span class="line">&#x2F;&#x2F; 生成 重做日志 amount&#x3D;400</span><br><span class="line">update finance set amount &#x3D; amount + 400;</span><br><span class="line">commit;</span><br></pre></td></tr></table></figure>
+
+<p><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2fdae04c7dc6f?w=4016&h=1892&f=png&s=1010471" alt="img"></p>
+<p><strong>redo log 有什么作用？</strong></p>
+<p>mysql 为了提升性能不会把每次的修改都实时同步到磁盘，而是会先存到Boffer Pool(缓冲池)里头，把这个当作缓存来用。然后使用后台线程去做<strong>缓冲池和磁盘之间的同步</strong>。</p>
+<p>那么问题来了，如果还没来的同步的时候宕机或断电了怎么办？还没来得及执行上面图中红色的操作。这样会导致丢部分已提交事务的修改信息！</p>
+<p>所以引入了redo log来记录<strong>已成功提交事务</strong>的修改信息，并且会把redo log持久化到磁盘，系统重启之后再顺序读取redo log恢复最新数据。</p>
+<p><strong>总结：</strong><br>redo log是用来恢复数据的 用于保障，<strong>已提交事务的持久化特性</strong></p>
+<h4 id="2-undo-log"><a href="#2-undo-log" class="headerlink" title="2.undo log"></a>2.undo log</h4><p><strong>什么是 undo log ？</strong></p>
+<p>undo log 叫做回滚日志，用于记录数据<strong>被修改前</strong>的信息。他正好跟前面所说的重做日志所记录的相反，重做日志记录数据被修改后的信息。undo log主要记录的是数据的逻辑变化，为了在发生错误时回滚之前的操作，需要将之前的操作都记录下来，然后在发生错误时才可以回滚。</p>
+<p>还用上面那两张表</p>
+<p><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2fe552145e2c1?w=4652&h=1848&f=png&s=867671" alt="img"></p>
+<p>每次写入数据或者修改数据之前都会把<strong>修改前的信息</strong>记录到 undo log。</p>
+<p><strong>undo log 有什么作用？</strong></p>
+<p>undo log 记录事务修改之前版本的数据信息，因此假如由于系统错误或者rollback操作而回滚的话可以根据undo log的信息来进行回滚到没被修改前的状态。</p>
+<p>总结：<br>undo log是用来回滚数据的用于保障<strong>未提交事务的原子性</strong></p>
+<h3 id="mysql锁技术以及MVCC基础"><a href="#mysql锁技术以及MVCC基础" class="headerlink" title="mysql锁技术以及MVCC基础"></a>mysql锁技术以及MVCC基础</h3><h4 id="1-mysql锁技术"><a href="#1-mysql锁技术" class="headerlink" title="1. mysql锁技术"></a>1. mysql锁技术</h4><p>当有多个请求来读取表中的数据时可以不采取任何操作，但是多个请求里有读请求，又有修改请求时必须有一种措施来进行并发控制。不然很有可能会造成不一致。<br><strong>读写锁</strong><br>解决上述问题很简单，只需用两种锁的组合来对读写请求进行控制即可，这两种锁被称为：</p>
+<p>共享锁(shared lock),又叫做”读锁”<br>读锁是可以共享的，或者说多个读请求可以共享一把锁读数据，不会造成阻塞。</p>
+<p>排他锁(exclusive lock),又叫做”写锁”<br>写锁会排斥其他所有获取锁的请求，一直阻塞，直到写入完成释放锁。</p>
+<p><img src="https://user-gold-cdn.xitu.io/2019/4/17/16a27696def80b5f?w=416&h=183&f=png&s=16219" alt="img"></p>
+<p>总结：<br>通过读写锁，可以做到读读可以并行，但是不能做到写读，写写并行<br>事务的隔离性就是根据读写锁来实现的！！！这个后面再说。</p>
+<h4 id="2-MVCC基础"><a href="#2-MVCC基础" class="headerlink" title="2. MVCC基础"></a>2. MVCC基础</h4><p>MVCC (MultiVersion Concurrency Control) 叫做多版本并发控制。</p>
+<blockquote>
+<p>InnoDB的 MVCC ，是通过在每行记录的后面保存两个隐藏的列来实现的。这两个列，<br>一个保存了行的创建时间，一个保存了行的过期时间，<br>当然存储的并不是实际的时间值，而是系统版本号。</p>
+</blockquote>
+<p>以上片段摘自《高性能Mysql》这本书对MVCC的定义。他的主要实现思想是通过<strong>数据多版本</strong>来做到<strong>读写分离</strong>。从而实现不加锁读进而做到读写并行。</p>
+<p><strong>MVCC在mysql中的实现依赖的是undo log与read view</strong></p>
+<ul>
+<li>undo log :undo log 中记录某行数据的多个版本的数据。</li>
+<li>read view :用来判断当前版本数据的可见性</li>
+</ul>
+<p><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2f5e3c3950ca1?w=3612&h=1512&f=png&s=816439" alt="img"></p>
+<h3 id="四、事务的实现"><a href="#四、事务的实现" class="headerlink" title="四、事务的实现"></a>四、事务的实现</h3><p>前面讲的重做日志，回滚日志以及锁技术就是实现事务的基础。</p>
+<ul>
+<li>事务的原子性是通过 undo log 来实现的</li>
+<li>事务的持久性性是通过 redo log 来实现的</li>
+<li>事务的隔离性是通过 (读写锁+MVCC)来实现的</li>
+<li>而事务的终极大 boss <strong>一致性</strong>是通过原子性，持久性，隔离性来实现的！！！</li>
+</ul>
+<p><strong>原子性，持久性，隔离性折腾半天的目的也是为了保障数据的一致性！</strong></p>
+<p>总之，ACID只是个概念，事务最终目的是要保障数据的可靠性，一致性。</p>
+<h4 id="1-原子性的实现"><a href="#1-原子性的实现" class="headerlink" title="1.原子性的实现"></a>1.原子性的实现</h4><p>什么是原子性：</p>
+<p>一个事务必须被视为不可分割的最小工作单位，一个事务中的所有操作要么全部成功提交，要么全部失败回滚，对于一个事务来说不可能只执行其中的部分操作，这就是事务的原子性。</p>
+<p>上面这段话取自《高性能MySQL》这本书对原子性的定义，原子性可以概括为就是要实现要么全部失败，要么全部成功。</p>
+<p>以上概念相信大家伙儿都了解，那么数据库是怎么实现的呢？ 就是通过<strong>回滚</strong>操作。<br>所谓回滚操作就是当发生错误异常或者显式的执行rollback语句时需要把数据还原到原先的模样，所以这时候就需要用到undo log来进行回滚，接下来看一下undo log在实现事务原子性时怎么发挥作用的</p>
+<h5 id="1-1-undo-log-的生成"><a href="#1-1-undo-log-的生成" class="headerlink" title="1.1 undo log 的生成"></a>1.1 undo log 的生成</h5><p>假设有两个表 bank和finance，表中原始数据如图所示，当进行插入，删除以及更新操作时生成的undo log如下面图所示：</p>
+<p><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2fe331bab111c?w=4652&h=1848&f=png&s=867671" alt="img"></p>
+<p><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2fe2457ff3820?w=1904&h=744&f=png&s=319469" alt="img"></p>
+<p>从上图可以了解到数据的变更都伴随着回滚日志的产生：<br>(1) 产生了被修改前数据(zhangsan,1000) 的回滚日志</p>
+<p>(2) 产生了被修改前数据(zhangsan,0) 的回滚日志</p>
+<p>根据上面流程可以得出如下结论：<br><strong>1.每条数据变更(insert/update/delete)操作都伴随一条undo log的生成,并且回滚日志必须先于数据持久化到磁盘上</strong><br><strong>2.所谓的回滚就是根据回滚日志做逆向操作，比如delete的逆向操作为insert，insert的逆向操作为delete，update的逆向为update等。</strong></p>
+<p>思考：为什么先写日志后写数据库？ —稍后做解释</p>
+<h5 id="1-2-根据undo-log-进行回滚"><a href="#1-2-根据undo-log-进行回滚" class="headerlink" title="1.2 根据undo log 进行回滚"></a>1.2 根据undo log 进行回滚</h5><p>为了做到同时成功或者失败，当系统发生错误或者执行rollback操作时需要根据undo log 进行回滚</p>
+<p><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2fece4894a8a8?w=3748&h=1100&f=png&s=475112" alt="img"></p>
+<p>回滚操作就是要还原到原来的状态，undo log记录了数据被修改前的信息以及新增和被删除的数据信息，根据undo log生成回滚语句，比如：</p>
+<p>(1) 如果在回滚日志里有新增数据记录，则生成删除该条的语句</p>
+<p>(2) 如果在回滚日志里有删除数据记录，则生成生成该条的语句</p>
+<p>(3) 如果在回滚日志里有修改数据记录，则生成修改到原先数据的语句</p>
+<h4 id="2-持久性的实现"><a href="#2-持久性的实现" class="headerlink" title="2.持久性的实现"></a>2.持久性的实现</h4><p>事务一旦提交，其所作做的修改会永久保存到数据库中，此时即使系统崩溃修改的数据也不会丢失。</p>
+<p>先了解一下MySQL的数据存储机制，MySQL的表数据是存放在磁盘上的，因此想要存取的时候都要经历磁盘IO,然而即使是使用SSD磁盘IO也是非常消耗性能的。<br>为此，为了提升性能InnoDB提供了缓冲池(Buffer Pool)，Buffer Pool中包含了磁盘数据页的映射，可以当做缓存来使用：<br><strong>读数据</strong>：会首先从缓冲池中读取，如果缓冲池中没有，则从磁盘读取在放入缓冲池；<br><strong>写数据</strong>：会首先写入缓冲池，缓冲池中的数据会定期同步到磁盘中；</p>
+<p>上面这种缓冲池的措施虽然在性能方面带来了质的飞跃，但是它也带来了新的问题，当MySQL系统宕机，断电的时候可能会丢数据！！！</p>
+<p>因为我们的数据已经提交了，但此时是在缓冲池里头，还没来得及在磁盘持久化，所以我们急需一种机制需要存一下已提交事务的数据，为恢复数据使用。</p>
+<p>于是 redo log就派上用场了。下面看下redo log是什么时候产生的</p>
+<p><img src="https://user-gold-cdn.xitu.io/2019/4/17/16a26f9acf011739?w=994&h=373&f=png&s=120202" alt="img"></p>
+<p>既然redo log也需要存储，也涉及磁盘IO为啥还用它？</p>
+<p>（1）redo log 的存储是顺序存储，而缓存同步是随机操作。</p>
+<p>（2）缓存同步是以数据页为单位的，每次传输的数据大小大于redo log。</p>
+<hr>
+<h4 id="3-隔离性实现"><a href="#3-隔离性实现" class="headerlink" title="3.隔离性实现"></a>3.隔离性实现</h4><p>隔离性是事务ACID特性里最复杂的一个。在SQL标准里定义了四种隔离级别，每一种级别都规定一个事务中的修改，哪些是事务之间可见的，哪些是不可见的。</p>
+<p>级别越低的隔离级别可以执行越高的并发，但同时实现复杂度以及开销也越大。</p>
+<p>Mysql 隔离级别有以下四种（级别由低到高）：</p>
+<ul>
+<li><strong>READ UNCOMMITED</strong> (未提交读)</li>
+<li><strong>READ COMMITED</strong> (提交读)</li>
+<li><strong>REPEATABLE READ</strong> (可重复读)</li>
+<li><strong>SERIALIZABLE</strong> (可序列化)</li>
+</ul>
+<p>只要彻底理解了隔离级别以及他的实现原理就相当于理解了ACID里的隔离型。前面说过原子性，隔离性，持久性的目的都是为了要做到一致性，但隔离型跟其他两个有所区别，原子性和持久性是为了要实现数据的可性保障靠，比如要做到宕机后的恢复，以及错误后的回滚。</p>
+<p>那么隔离性是要做到什么呢？ <strong>隔离性是要管理多个并发读写请求的访问顺序。</strong> 这种顺序包括<strong>串行</strong>或者是<strong>并行</strong><br>说明一点，写请求不仅仅是指insert操作，又包括update操作。</p>
+<p><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2c1c8b5285ee3?w=688&h=233&f=png&s=40492" alt="img"></p>
+<p>总之，从隔离性的实现可以看出这是一场数据的可靠性与性能之间的权衡。</p>
+<ul>
+<li>可靠性性高的，并发性能低(比如 Serializable)</li>
+<li>可靠性低的，并发性能高(比如 Read Uncommited)</li>
+</ul>
+<p><strong>READ UNCOMMITTED</strong></p>
+<p>在READ UNCOMMITTED隔离级别下，事务中的修改即使还没提交，对其他事务是可见的。事务可以读取未提交的数据，造成脏读。</p>
+<p>因为读不会加任何锁，所以写操作在读的过程中修改数据，所以会造成脏读。好处是可以提升并发处理性能，能做到<strong>读写并行</strong>。</p>
+<p>换句话说，读的操作不能排斥写请求。<br><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2ed4dbd348a68?w=4284&h=1288&f=png&s=731191" alt="img"></p>
+<p>优点：读写并行，性能高<br>缺点：造成脏读</p>
+<p><strong>READ COMMITTED</strong></p>
+<p>一个事务的修改在他提交之前的所有修改，对其他事务都是不可见的。其他事务能读到已提交的修改变化。在很多场景下这种逻辑是可以接受的。</p>
+<p>InnoDB在 READ COMMITTED，使用排它锁,读取数据不加锁而是使用了MVCC机制。或者换句话说他采用了<strong>读写分离机制</strong>。<br>但是该级别会产生<strong>不可重读</strong>以及<strong>幻读</strong>问题。</p>
+<blockquote>
+<p>什么是不可重读？</p>
+</blockquote>
+<p>在一个事务内多次读取的结果不一样。</p>
+<blockquote>
+<p>为什么会产生不可重复读？</p>
+</blockquote>
+<p>这跟 READ COMMITTED 级别下的MVCC机制有关系，在该隔离级别下每次 select的时候新<strong>生成一个版本号</strong>，所以每次select的时候读的不是一个副本而是不同的副本。</p>
+<p>在每次select之间有其他事务<strong>更新</strong>了我们读取的数据并提交了，那就出现了不可重复读<br><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2f05d63f388d0?w=3612&h=1512&f=png&s=816439" alt="img"></p>
+<p><strong>REPEATABLE READ</strong>(Mysql默认隔离级别)</p>
+<p>在一个事务内的多次读取的结果是一样的。这种级别下可以避免，脏读，不可重复读等查询问题。mysql 有两种机制可以达到这种隔离级别的效果，分别是采用读写锁以及MVCC。</p>
+<p><strong>采用读写锁实现</strong>：</p>
+<p><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2c351eb03fc24?w=1082&h=290&f=png&s=120400" alt="img"><br>为什么能可重复度？只要没释放读锁，在次读的时候还是可以读到第一次读的数据。</p>
+<p>优点：实现起来简单</p>
+<p>缺点：无法做到读写并行</p>
+<p><strong>采用MVCC实现</strong>：<br><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2f054474b394b?w=3584&h=1512&f=png&s=756027" alt="img"></p>
+<p>为什么能可重复度？因为多次读取只生成一个版本，读到的自然是相同数据。</p>
+<p>优点：读写并行</p>
+<p>缺点：实现的复杂度高</p>
+<p>但是在该隔离级别下仍会存在幻读的问题，关于幻读的解决我打算另开一篇来介绍。</p>
+<p><strong>SERIALIZABLE</strong></p>
+<p>该隔离级别理解起来最简单，实现也最单。在隔离级别下除了不会造成数据不一致问题，没其他优点。</p>
+<p><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2f56d34ff739e?w=3528&h=1060&f=png&s=414467" alt="img"></p>
+<p><img src="https://user-gold-cdn.xitu.io/2019/4/18/16a2f69776d551b3?w=2608&h=776&f=png&s=445068" alt="img"></p>
+<p>–摘自《高性能Mysql》</p>
+<h4 id="4-一致性的实现"><a href="#4-一致性的实现" class="headerlink" title="4.一致性的实现"></a>4.一致性的实现</h4><blockquote>
+<p>数据库总是从一个一致性的状态转移到另一个一致性的状态.</p>
+</blockquote>
+<p>下面举个例子:zhangsan 从银行卡转400到理财账户</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">start transaction;</span><br><span class="line">select balance from bank where name&#x3D;&quot;zhangsan&quot;;</span><br><span class="line">&#x2F;&#x2F; 生成 重做日志 balance&#x3D;600</span><br><span class="line">update bank set balance &#x3D; balance - 400; </span><br><span class="line">&#x2F;&#x2F; 生成 重做日志 amount&#x3D;400</span><br><span class="line">update finance set amount &#x3D; amount + 400;</span><br><span class="line">commit;</span><br></pre></td></tr></table></figure>
+
+<p>1.假如执行完 <code>update bank set balance = balance - 400;</code>之发生异常了，银行卡的钱也不能平白无辜的减少，而是回滚到最初状态。</p>
+<p>2.又或者事务提交之后，缓冲池还没同步到磁盘的时候宕机了，这也是不能接受的，应该在重启的时候恢复并持久化。</p>
+<p>3.假如有并发事务请求的时候也应该做好事务之间的可见性问题，避免造成脏读，不可重复读，幻读等。在涉及并发的情况下往往在性能和一致性之间做平衡，做一定的取舍，所以隔离性也是对一致性的一种破坏。</p>
+<hr>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>本文出发点是想讲一下Mysql的事务的实现原理。</p>
+<p>实现事务采取了哪些技术以及思想？</p>
+<ul>
+<li>原子性：使用 undo log ，从而达到回滚</li>
+<li>持久性：使用 redo log，从而达到故障后恢复</li>
+<li>隔离性：使用锁以及MVCC,运用的优化思想有读写分离，读读并行，读写并行</li>
+<li>一致性：通过回滚，以及恢复，和在并发环境下的隔离做到一致性。</li>
+</ul>
+<p>转载自 <a href="https://www.cnblogs.com/wyc1994666/p/11367051.html" target="_blank" rel="noopener">来自大佬的链接</a></p>
+
+      
+    </div>
+
+    
+      
+
+
+    
+
+    
+    
+    
+
+    
+
+    
+      <div>
+        <div style="padding: 10px 0; margin: 20px auto; width: 90%; text-align: center;">
+  <div><p style="font-size:14px; color:#34495e; margin:0 0 5px 0;">----\(˙<>˙)/----赞赏一下吧～</p></div>
+  <button id="rewardButton" disable="enable" onclick="var qr = document.getElementById('QR'); if (qr.style.display === 'none') {qr.style.display='block';} else {qr.style.display='none'}">
+    <span>打赏</span>
+  </button>
+  <div id="QR" style="display: none;">
+
+    
+      <div id="wechat" style="display: inline-block">
+        <img id="wechat_qr" src="/images/wechatpay.jpg" alt="wicherQAQ 微信支付"/>
+        <p>微信支付</p>
+      </div>
+    
+
+    
+      <div id="alipay" style="display: inline-block">
+        <img id="alipay_qr" src="/images/alipay.jpg" alt="wicherQAQ 支付宝"/>
+        <p>支付宝</p>
+      </div>
+    
+
+    
+
+  </div>
+</div>
+
+      </div>
+    
+
+    
+      <div>
+        <ul class="post-copyright">
+  <li class="post-copyright-author">
+    <strong>本文作者： </strong>wicherQAQ</li>
+  <li class="post-copyright-link">
+    <strong>本文链接：</strong>
+    <a href="https://wicherqaq.github.io/2020/04/20/mysql-%E4%BA%8B%E5%8A%A1%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/" title="mysql 事务的实现原理">https://wicherqaq.github.io/2020/04/20/mysql-%E4%BA%8B%E5%8A%A1%E7%9A%84%E5%AE%9E%E7%8E%B0%E5%8E%9F%E7%90%86/</a>
+  </li>
+  <li class="post-copyright-license">
+    <strong>版权声明： </strong>本博客所有文章除特别声明外，均采用 CC BY-NC-SA 4.0 许可协议。转载请注明出处！</li>
+</ul>
+
+      </div>
+    
+
+    <footer class="post-footer">
+      
+
+      
+      
+        <div class="post-widgets">
+        
+          <div class="wp_rating">
+            <div id="wpac-rating"></div>
+          </div>
+        
+
+        
+
+        
+        </div>
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2020/04/20/what-is-threadLocal/" rel="next" title="what is threadLocal">
+                <i class="fa fa-chevron-left"></i> what is threadLocal
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+              <a href="/2020/04/21/LeetCode-392-%E5%88%A4%E6%96%AD%E5%AD%90%E5%BA%8F%E5%88%97/" rel="prev" title="LeetCode-392-判断子序列">
+                LeetCode-392-判断子序列 <i class="fa fa-chevron-right"></i>
+              </a>
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+  </div>
+
+
+          </div>
+          
+
+  
+    <div class="comments" id="comments">
+    </div>
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+            
+              <img class="site-author-image" itemprop="image"
+                src="/images/touxiang.jpg"
+                alt="wicherQAQ" />
+            
+              <p class="site-author-name" itemprop="name">wicherQAQ</p>
+              <p class="site-description motion-element" itemprop="description">阻塞/非阻塞式依据-进程是否需要等待执行结果</p>
+          </div>
+
+          
+            <nav class="site-state motion-element">
+              
+                <div class="site-state-item site-state-posts">
+                
+                  <a href="/archives/">
+                
+                    <span class="site-state-item-count">240</span>
+                    <span class="site-state-item-name">日志</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-categories">
+                  <a href="/categories/index.html">
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">34</span>
+                    <span class="site-state-item-name">分类</span>
+                  </a>
+                </div>
+              
+
+              
+                
+                
+                <div class="site-state-item site-state-tags">
+                  <a href="/tags/index.html">
+                    
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                      
+                    
+                    <span class="site-state-item-count">60</span>
+                    <span class="site-state-item-name">标签</span>
+                  </a>
+                </div>
+              
+            </nav>
+          
+
+          
+            <div class="feed-link motion-element">
+              <a href="/atom.xml" rel="alternate">
+                <i class="fa fa-rss"></i>
+                RSS
+              </a>
+            </div>
+          
+
+          
+            <div class="links-of-author motion-element">
+              
+                <span class="links-of-author-item">
+                  <a href="https://github.com/wicherQAQ" target="_blank" title="GitHub"><i class="fa fa-fw fa-github"></i>GitHub</a>
+                  
+                </span>
+              
+                <span class="links-of-author-item">
+                  <a href="mailto:weichao_wu@163.com" target="_blank" title="E-Mail"><i class="fa fa-fw fa-envelope"></i>E-Mail</a>
+                  
+                </span>
+              
+            </div>
+          
+
+          
+          
+
+          
+          
+            <div class="links-of-blogroll motion-element links-of-blogroll-block">
+              <div class="links-of-blogroll-title">
+                <i class="fa  fa-fw fa-link"></i>
+                Links
+              </div>
+              <ul class="links-of-blogroll-list">
+                
+                  <li class="links-of-blogroll-item">
+                    <a href="http://www.baidu.com/" title="Baidu" target="_blank">Baidu</a>
+                  </li>
+                
+                  <li class="links-of-blogroll-item">
+                    <a href="http://www.github.com/" title="GitHub" target="_blank">GitHub</a>
+                  </li>
+                
+                  <li class="links-of-blogroll-item">
+                    <a href="http://www.gitee.com/" title="Gitee" target="_blank">Gitee</a>
+                  </li>
+                
+                  <li class="links-of-blogroll-item">
+                    <a href="http://www.csdn.net/" title="CSDN" target="_blank">CSDN</a>
+                  </li>
+                
+              </ul>
+            </div>
+          
+
+          
+            
+          
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#开篇"><span class="nav-number">1.</span> <span class="nav-text">开篇</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#redo与-undo介绍"><span class="nav-number">2.</span> <span class="nav-text">redo与 undo介绍</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#1-redo-log"><span class="nav-number">2.1.</span> <span class="nav-text">1. redo log</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-undo-log"><span class="nav-number">2.2.</span> <span class="nav-text">2.undo log</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#mysql锁技术以及MVCC基础"><span class="nav-number">3.</span> <span class="nav-text">mysql锁技术以及MVCC基础</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#1-mysql锁技术"><span class="nav-number">3.1.</span> <span class="nav-text">1. mysql锁技术</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-MVCC基础"><span class="nav-number">3.2.</span> <span class="nav-text">2. MVCC基础</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#四、事务的实现"><span class="nav-number">4.</span> <span class="nav-text">四、事务的实现</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#1-原子性的实现"><span class="nav-number">4.1.</span> <span class="nav-text">1.原子性的实现</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#1-1-undo-log-的生成"><span class="nav-number">4.1.1.</span> <span class="nav-text">1.1 undo log 的生成</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#1-2-根据undo-log-进行回滚"><span class="nav-number">4.1.2.</span> <span class="nav-text">1.2 根据undo log 进行回滚</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2-持久性的实现"><span class="nav-number">4.2.</span> <span class="nav-text">2.持久性的实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3-隔离性实现"><span class="nav-number">4.3.</span> <span class="nav-text">3.隔离性实现</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#4-一致性的实现"><span class="nav-number">4.4.</span> <span class="nav-text">4.一致性的实现</span></a></li></ol></li><li class="nav-item nav-level-3"><a class="nav-link" href="#总结"><span class="nav-number">5.</span> <span class="nav-text">总结</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+        <div class="back-to-top">
+          <i class="fa fa-arrow-up"></i>
+          
+            <span id="scrollpercent"><span>0</span>%</span>
+          
+        </div>
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright"> &copy; <span itemprop="copyrightYear">2020</span>
+  <span class="with-love" id="animate">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">wicherQAQ</span>
+
+  
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-area-chart"></i>
+    </span>
+    
+    <span title="站点总字数">386k</span>
+  
+
+  
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+    
+    <span title="站点阅读时长">5:51</span>
+  
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+<div>
+<script async src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+	<span id="busuanzi_container_site_pv">总访问量<span id="busuanzi_value_site_pv"></span>次</span>
+	<span class="post-meta-divider">|</span>
+	<span id="busuanzi_container_site_uv">总访客<span id="busuanzi_value_site_uv"></span>人</span>
+	
+</div>
+
+
+
+
+
+<span id="sitetime"></span>
+<script language=javascript>
+	function siteTime(){
+		window.setTimeout("siteTime()", 1000);
+		var seconds = 1000;
+		var minutes = seconds * 60;
+		var hours = minutes * 60;
+		var days = hours * 24;
+		var years = days * 365;
+		var today = new Date();
+		var todayYear = today.getFullYear();
+		var todayMonth = today.getMonth()+1;
+		var todayDate = today.getDate();
+		var todayHour = today.getHours();
+		var todayMinute = today.getMinutes();
+		var todaySecond = today.getSeconds();
+		/* Date.UTC() -- 返回date对象距世界标准时间(UTC)1970年1月1日午夜之间的毫秒数(时间戳)
+		year - 作为date对象的年份，为4位年份值
+		month - 0-11之间的整数，做为date对象的月份
+		day - 1-31之间的整数，做为date对象的天数
+		hours - 0(午夜24点)-23之间的整数，做为date对象的小时数
+		minutes - 0-59之间的整数，做为date对象的分钟数
+		seconds - 0-59之间的整数，做为date对象的秒数
+		microseconds - 0-999之间的整数，做为date对象的毫秒数 */
+		var t1 = Date.UTC(2018,02,13,15,00,00); //北京时间2018-2-13 00:00:00
+		var t2 = Date.UTC(todayYear,todayMonth,todayDate,todayHour,todayMinute,todaySecond);
+		var diff = t2-t1;
+		var diffYears = Math.floor(diff/years);
+		var diffDays = Math.floor((diff/days)-diffYears*365);
+		var diffHours = Math.floor((diff-(diffYears*365+diffDays)*days)/hours);
+		var diffMinutes = Math.floor((diff-(diffYears*365+diffDays)*days-diffHours*hours)/minutes);
+		var diffSeconds = Math.floor((diff-(diffYears*365+diffDays)*days-diffHours*hours-diffMinutes*minutes)/seconds);
+		document.getElementById("sitetime").innerHTML=" 已安全运行了"+/*diffYears+" 年 "+*/diffDays+" 天 "+diffHours+" 小时 "+diffMinutes+" 分钟 "+diffSeconds+" 秒";
+	}/*因为建站时间还没有一年，就将之注释掉了。需要的可以取消*/
+	siteTime();
+</script>
+
+
+        
+
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+
+    
+	
+    
+
+    
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=6.5.0"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=6.5.0"></script>
+
+
+
+  
+  
+
+
+  <script type="text/javascript" src="/js/src/affix.js?v=6.5.0"></script>
+
+  <script type="text/javascript" src="/js/src/schemes/pisces.js?v=6.5.0"></script>
+
+
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=6.5.0"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=6.5.0"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=6.5.0"></script>
+
+
+
+  
+
+
+
+  
+
+
+
+
+
+
+
+
+  <script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script>
+  
+  
+    
+  
+  <script src="https://cdn.jsdelivr.net/npm/valine@1.3.10/dist/Valine.min.js"></script>
+  
+  <script type="text/javascript">
+    var GUEST = ['nick','mail','link'];
+    var guest = 'nick,mail';
+    guest = guest.split(',').filter(function (item) {
+      return GUEST.indexOf(item)>-1;
+    });
+    new Valine({
+        el: '#comments' ,
+        verify: false,
+        notify: false,
+        appId: '76m1CTaKvfODomhTlTdq9Yyj-9Nh9j0Va',
+        appKey: 'bV6QcWx7yREuBLTALPFBUqmv',
+        placeholder: 'ヾﾉ≧∀≦)o 来呀！吐槽一番吧！',
+        avatar:'wavatar',
+        meta:guest,
+        pageSize:'10' || 10,
+        visitor: false
+    });
+  </script>
+
+
+
+  
+
+  <script type="text/javascript">
+    // Popup Window;
+    var isfetched = false;
+    var isXml = true;
+    // Search DB path;
+    var search_path = "search.xml";
+    if (search_path.length === 0) {
+      search_path = "search.xml";
+    } else if (/json$/i.test(search_path)) {
+      isXml = false;
+    }
+    var path = "/" + search_path;
+    // monitor main search box;
+
+    var onPopupClose = function (e) {
+      $('.popup').hide();
+      $('#local-search-input').val('');
+      $('.search-result-list').remove();
+      $('#no-result').remove();
+      $(".local-search-pop-overlay").remove();
+      $('body').css('overflow', '');
+    }
+
+    function proceedsearch() {
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay"></div>')
+        .css('overflow', 'hidden');
+      $('.search-popup-overlay').click(onPopupClose);
+      $('.popup').toggle();
+      var $localSearchInput = $('#local-search-input');
+      $localSearchInput.attr("autocapitalize", "none");
+      $localSearchInput.attr("autocorrect", "off");
+      $localSearchInput.focus();
+    }
+
+    // search function;
+    var searchFunc = function(path, search_id, content_id) {
+      'use strict';
+
+      // start loading animation
+      $("body")
+        .append('<div class="search-popup-overlay local-search-pop-overlay">' +
+          '<div id="search-loading-icon">' +
+          '<i class="fa fa-spinner fa-pulse fa-5x fa-fw"></i>' +
+          '</div>' +
+          '</div>')
+        .css('overflow', 'hidden');
+      $("#search-loading-icon").css('margin', '20% auto 0 auto').css('text-align', 'center');
+
+      
+
+      $.ajax({
+        url: path,
+        dataType: isXml ? "xml" : "json",
+        async: true,
+        success: function(res) {
+          // get the contents from search data
+          isfetched = true;
+          $('.popup').detach().appendTo('.header-inner');
+          var datas = isXml ? $("entry", res).map(function() {
+            return {
+              title: $("title", this).text(),
+              content: $("content",this).text(),
+              url: $("url" , this).text()
+            };
+          }).get() : res;
+          var input = document.getElementById(search_id);
+          var resultContent = document.getElementById(content_id);
+          var inputEventFunction = function() {
+            var searchText = input.value.trim().toLowerCase();
+            var keywords = searchText.split(/[\s\-]+/);
+            if (keywords.length > 1) {
+              keywords.push(searchText);
+            }
+            var resultItems = [];
+            if (searchText.length > 0) {
+              // perform local searching
+              datas.forEach(function(data) {
+                var isMatch = false;
+                var hitCount = 0;
+                var searchTextCount = 0;
+                var title = data.title.trim();
+                var titleInLowerCase = title.toLowerCase();
+                var content = data.content.trim().replace(/<[^>]+>/g,"");
+                
+                var contentInLowerCase = content.toLowerCase();
+                var articleUrl = decodeURIComponent(data.url);
+                var indexOfTitle = [];
+                var indexOfContent = [];
+                // only match articles with not empty titles
+                if(title != '') {
+                  keywords.forEach(function(keyword) {
+                    function getIndexByWord(word, text, caseSensitive) {
+                      var wordLen = word.length;
+                      if (wordLen === 0) {
+                        return [];
+                      }
+                      var startPosition = 0, position = [], index = [];
+                      if (!caseSensitive) {
+                        text = text.toLowerCase();
+                        word = word.toLowerCase();
+                      }
+                      while ((position = text.indexOf(word, startPosition)) > -1) {
+                        index.push({position: position, word: word});
+                        startPosition = position + wordLen;
+                      }
+                      return index;
+                    }
+
+                    indexOfTitle = indexOfTitle.concat(getIndexByWord(keyword, titleInLowerCase, false));
+                    indexOfContent = indexOfContent.concat(getIndexByWord(keyword, contentInLowerCase, false));
+                  });
+                  if (indexOfTitle.length > 0 || indexOfContent.length > 0) {
+                    isMatch = true;
+                    hitCount = indexOfTitle.length + indexOfContent.length;
+                  }
+                }
+
+                // show search results
+
+                if (isMatch) {
+                  // sort index by position of keyword
+
+                  [indexOfTitle, indexOfContent].forEach(function (index) {
+                    index.sort(function (itemLeft, itemRight) {
+                      if (itemRight.position !== itemLeft.position) {
+                        return itemRight.position - itemLeft.position;
+                      } else {
+                        return itemLeft.word.length - itemRight.word.length;
+                      }
+                    });
+                  });
+
+                  // merge hits into slices
+
+                  function mergeIntoSlice(text, start, end, index) {
+                    var item = index[index.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    var hits = [];
+                    var searchTextCountInSlice = 0;
+                    while (position + word.length <= end && index.length != 0) {
+                      if (word === searchText) {
+                        searchTextCountInSlice++;
+                      }
+                      hits.push({position: position, length: word.length});
+                      var wordEnd = position + word.length;
+
+                      // move to next position of hit
+
+                      index.pop();
+                      while (index.length != 0) {
+                        item = index[index.length - 1];
+                        position = item.position;
+                        word = item.word;
+                        if (wordEnd > position) {
+                          index.pop();
+                        } else {
+                          break;
+                        }
+                      }
+                    }
+                    searchTextCount += searchTextCountInSlice;
+                    return {
+                      hits: hits,
+                      start: start,
+                      end: end,
+                      searchTextCount: searchTextCountInSlice
+                    };
+                  }
+
+                  var slicesOfTitle = [];
+                  if (indexOfTitle.length != 0) {
+                    slicesOfTitle.push(mergeIntoSlice(title, 0, title.length, indexOfTitle));
+                  }
+
+                  var slicesOfContent = [];
+                  while (indexOfContent.length != 0) {
+                    var item = indexOfContent[indexOfContent.length - 1];
+                    var position = item.position;
+                    var word = item.word;
+                    // cut out 100 characters
+                    var start = position - 20;
+                    var end = position + 80;
+                    if(start < 0){
+                      start = 0;
+                    }
+                    if (end < position + word.length) {
+                      end = position + word.length;
+                    }
+                    if(end > content.length){
+                      end = content.length;
+                    }
+                    slicesOfContent.push(mergeIntoSlice(content, start, end, indexOfContent));
+                  }
+
+                  // sort slices in content by search text's count and hits' count
+
+                  slicesOfContent.sort(function (sliceLeft, sliceRight) {
+                    if (sliceLeft.searchTextCount !== sliceRight.searchTextCount) {
+                      return sliceRight.searchTextCount - sliceLeft.searchTextCount;
+                    } else if (sliceLeft.hits.length !== sliceRight.hits.length) {
+                      return sliceRight.hits.length - sliceLeft.hits.length;
+                    } else {
+                      return sliceLeft.start - sliceRight.start;
+                    }
+                  });
+
+                  // select top N slices in content
+
+                  var upperBound = parseInt('1');
+                  if (upperBound >= 0) {
+                    slicesOfContent = slicesOfContent.slice(0, upperBound);
+                  }
+
+                  // highlight title and content
+
+                  function highlightKeyword(text, slice) {
+                    var result = '';
+                    var prevEnd = slice.start;
+                    slice.hits.forEach(function (hit) {
+                      result += text.substring(prevEnd, hit.position);
+                      var end = hit.position + hit.length;
+                      result += '<b class="search-keyword">' + text.substring(hit.position, end) + '</b>';
+                      prevEnd = end;
+                    });
+                    result += text.substring(prevEnd, slice.end);
+                    return result;
+                  }
+
+                  var resultItem = '';
+
+                  if (slicesOfTitle.length != 0) {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + highlightKeyword(title, slicesOfTitle[0]) + "</a>";
+                  } else {
+                    resultItem += "<li><a href='" + articleUrl + "' class='search-result-title'>" + title + "</a>";
+                  }
+
+                  slicesOfContent.forEach(function (slice) {
+                    resultItem += "<a href='" + articleUrl + "'>" +
+                      "<p class=\"search-result\">" + highlightKeyword(content, slice) +
+                      "...</p>" + "</a>";
+                  });
+
+                  resultItem += "</li>";
+                  resultItems.push({
+                    item: resultItem,
+                    searchTextCount: searchTextCount,
+                    hitCount: hitCount,
+                    id: resultItems.length
+                  });
+                }
+              })
+            };
+            if (keywords.length === 1 && keywords[0] === "") {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-search fa-5x" /></div>'
+            } else if (resultItems.length === 0) {
+              resultContent.innerHTML = '<div id="no-result"><i class="fa fa-frown-o fa-5x" /></div>'
+            } else {
+              resultItems.sort(function (resultLeft, resultRight) {
+                if (resultLeft.searchTextCount !== resultRight.searchTextCount) {
+                  return resultRight.searchTextCount - resultLeft.searchTextCount;
+                } else if (resultLeft.hitCount !== resultRight.hitCount) {
+                  return resultRight.hitCount - resultLeft.hitCount;
+                } else {
+                  return resultRight.id - resultLeft.id;
+                }
+              });
+              var searchResultList = '<ul class=\"search-result-list\">';
+              resultItems.forEach(function (result) {
+                searchResultList += result.item;
+              })
+              searchResultList += "</ul>";
+              resultContent.innerHTML = searchResultList;
+            }
+          }
+
+          if ('auto' === 'auto') {
+            input.addEventListener('input', inputEventFunction);
+          } else {
+            $('.search-icon').click(inputEventFunction);
+            input.addEventListener('keypress', function (event) {
+              if (event.keyCode === 13) {
+                inputEventFunction();
+              }
+            });
+          }
+
+          // remove loading animation
+          $(".local-search-pop-overlay").remove();
+          $('body').css('overflow', '');
+
+          proceedsearch();
+        }
+      });
+    }
+
+    // handle and trigger popup window;
+    $('.popup-trigger').click(function(e) {
+      e.stopPropagation();
+      if (isfetched === false) {
+        searchFunc(path, 'local-search-input', 'local-search-result');
+      } else {
+        proceedsearch();
+      };
+    });
+
+    $('.popup-btn-close').click(onPopupClose);
+    $('.popup').click(function(e){
+      e.stopPropagation();
+    });
+    $(document).on('keyup', function (event) {
+      var shouldDismissSearchPopup = event.which === 27 &&
+        $('.search-popup').is(':visible');
+      if (shouldDismissSearchPopup) {
+        onPopupClose();
+      }
+    });
+  </script>
+
+
+
+
+
+  
+
+  
+  <script>
+    
+    function addCount(Counter) {
+      var $visitors = $(".leancloud_visitors");
+      var url = $visitors.attr('id').trim();
+      var title = $visitors.attr('data-flag-title').trim();
+
+      Counter('get', '/classes/Counter', { where: JSON.stringify({ url }) })
+        .done(function ({ results }) {
+          if (results.length > 0) {
+            var counter = results[0];
+            
+              var $element = $(document.getElementById(url));
+              $element.find('.leancloud-visitors-count').text(counter.time + 1);
+            
+            Counter('put', `/classes/Counter/${counter.objectId}`, JSON.stringify({ time: { "__op":"Increment", "amount":1 } }))
+            
+            .fail(function ({ responseJSON }) {
+                console.log('Failed to save Visitor num, with error message: ' + responseJSON.error);
+            })
+          } else {
+            
+              Counter('post', '/classes/Counter', JSON.stringify({ title: title, url: url, time: 1}))
+                .done(function () {
+                  var $element = $(document.getElementById(url));
+                  $element.find('.leancloud-visitors-count').text(1);
+                })
+                .fail(function () {
+                  console.log('Failed to create');
+                });
+            
+          }
+        })
+      .fail(function ({ responseJSON }) {
+        console.log('LeanCloud Counter Error:' + responseJSON.code + " " + responseJSON.error);
+      });
+    }
+    
+
+    $(function() {
+      $.get('https://app-router.leancloud.cn/2/route?appId=' + "76m1CTaKvfODomhTlTdq9Yyj-9Nh9j0Va")
+        .done(function ({ api_server }) {
+          var Counter = function (method, url, data) {
+            return $.ajax({
+              method: method,
+              url: `https://${api_server}/1.1${url}`,
+              headers: {
+                'X-LC-Id': "76m1CTaKvfODomhTlTdq9Yyj-9Nh9j0Va",
+                'X-LC-Key': "bV6QcWx7yREuBLTALPFBUqmv",
+                'Content-Type': 'application/json',
+              },
+              data: data,
+            });
+          };
+          
+          addCount(Counter);
+          
+        })
+    });
+  </script>
+
+
+
+  
+
+  
+
+  
+
+  
+
+  
+  
+  <script type="text/javascript">
+  wpac_init = window.wpac_init || [];
+  wpac_init.push({widget: 'Rating', id: ,
+    el: 'wpac-rating',
+    color: 'f79533'
+  });
+  (function() {
+    if ('WIDGETPACK_LOADED' in window) return;
+    WIDGETPACK_LOADED = true;
+    var mc = document.createElement('script');
+    mc.type = 'text/javascript';
+    mc.async = true;
+    mc.src = '//embed.widgetpack.com/widget.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(mc, s.nextSibling);
+  })();
+  </script>
+
+
+  
+
+  
+
+  
+
+  
+
+  
+  <style>
+    .copy-btn {
+      display: inline-block;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 20px;
+      color: #333;
+      white-space: nowrap;
+      vertical-align: middle;
+      cursor: pointer;
+      background-color: #eee;
+      background-image: linear-gradient(#fcfcfc, #eee);
+      border: 1px solid #d5d5d5;
+      border-radius: 3px;
+      user-select: none;
+      outline: 0;
+    }
+
+    .highlight-wrap .copy-btn {
+      transition: opacity .3s ease-in-out;
+      opacity: 0;
+      padding: 2px 6px;
+      position: absolute;
+      right: 4px;
+      top: 8px;
+    }
+
+    .highlight-wrap:hover .copy-btn,
+    .highlight-wrap .copy-btn:focus {
+      opacity: 1
+    }
+
+    .highlight-wrap {
+      position: relative;
+    }
+  </style>
+  <script>
+    $('.highlight').each(function (i, e) {
+      var $wrap = $('<div>').addClass('highlight-wrap')
+      $(e).after($wrap)
+      $wrap.append($('<button>').addClass('copy-btn').append('复制').on('click', function (e) {
+        var code = $(this).parent().find('.code').find('.line').map(function (i, e) {
+          return $(e).text()
+        }).toArray().join('\n')
+        var ta = document.createElement('textarea')
+        document.body.appendChild(ta)
+        ta.style.position = 'absolute'
+        ta.style.top = '0px'
+        ta.style.left = '0px'
+        ta.value = code
+        ta.select()
+        ta.focus()
+        var result = document.execCommand('copy')
+        document.body.removeChild(ta)
+        
+          if(result)$(this).text('复制成功')
+          else $(this).text('复制失败')
+        
+        $(this).blur()
+      })).on('mouseleave', function (e) {
+        var $b = $(this).find('.copy-btn')
+        setTimeout(function () {
+          $b.text('复制')
+        }, 300)
+      }).append(e)
+    })
+  </script>
+
+
+</body>
+</html>
+
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/src/clicklove.js"></script>
