@@ -6,7 +6,7 @@
   <link href="https://wicherqaq.github.io/atom.xml" rel="self"/>
   
   <link href="https://wicherqaq.github.io/"/>
-  <updated>2020-09-16T07:19:43.477Z</updated>
+  <updated>2020-10-21T02:54:40.505Z</updated>
   <id>https://wicherqaq.github.io/</id>
   
   <author>
@@ -15,6 +15,26 @@
   </author>
   
   <generator uri="https://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title>windows安装rabbitmq</title>
+    <link href="https://wicherqaq.github.io/2020/10/21/windows%E5%AE%89%E8%A3%85rabbitmq/"/>
+    <id>https://wicherqaq.github.io/2020/10/21/windows%E5%AE%89%E8%A3%85rabbitmq/</id>
+    <published>2020-10-21T02:49:39.000Z</published>
+    <updated>2020-10-21T02:54:40.505Z</updated>
+    
+    <content type="html"><![CDATA[<h1 id="Windows安装RabbitMQ"><a href="#Windows安装RabbitMQ" class="headerlink" title="Windows安装RabbitMQ"></a>Windows安装RabbitMQ</h1><h4 id="第一步：下载并安装erlang"><a href="#第一步：下载并安装erlang" class="headerlink" title="第一步：下载并安装erlang"></a>第一步：下载并安装erlang</h4><ul><li><ul><li>原因：RabbitMQ服务端代码是使用并发式语言Erlang编写的，安装Rabbit MQ的前提是安装Erlang。</li><li>下载地址：<a href="http://www.erlang.org/downloads" target="_blank" rel="noopener">http://www.erlang.org/downloads</a></li></ul></li></ul><p><img src="https://img2018.cnblogs.com/blog/773413/201910/773413-20191025144318759-1430833390.png" alt></p><p><img src="https://img2018.cnblogs.com/blog/773413/201910/773413-20191025144400115-2136772609.png" alt></p><ul><li>安装后要配置一下系统的环境变量。</li></ul><p>此电脑–&gt;鼠标右键“属性”–&gt;高级系统设置–&gt;环境变量–&gt;“新建”系统环境变量</p><p><img src="https://img-blog.csdn.net/20180208133656531?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvd2VpeGluXzM5NzM1OTIz/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt></p><p>变量名：ERLANG_HOME</p><p>变量值就是刚才erlang的安装地址，点击确定。</p><p>然后双击系统变量path</p><p><img src="https://img-blog.csdn.net/20180208133941480?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvd2VpeGluXzM5NzM1OTIz/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="img"></p><p>点击“新建”，将%ERLANG_HOME%\bin加入到path中。</p><p><img src="https://img-blog.csdn.net/20180208134038141?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvd2VpeGluXzM5NzM1OTIz/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="img"></p><ul><li><p>最后windows键+R键，输入cmd，再输入erl，看到版本号就说明erlang安装成功了。</p></li><li></li></ul><h4 id="第二步：下载并安装RabbitMQ"><a href="#第二步：下载并安装RabbitMQ" class="headerlink" title="第二步：下载并安装RabbitMQ"></a>第二步：下载并安装RabbitMQ</h4><ul><li>下载地址：<a href="http://www.rabbitmq.com/download.html" target="_blank" rel="noopener">http://www.rabbitmq.com/download.html</a></li></ul><p><img src="https://img-blog.csdn.net/20180208140346384?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvd2VpeGluXzM5NzM1OTIz/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="img"></p><ul><li>双击下载后的.exe文件，安装过程与erlang的安装过程相同。</li><li>RabbitMQ安装好后接下来安装RabbitMQ-Plugins。打开命令行cd，输入RabbitMQ的sbin目录。</li></ul><p>我的目录是：D:\Program Files\RabbitMQ Server\rabbitmq_server-3.7.3\sbin</p><p>然后在后面输入rabbitmq-plugins enable rabbitmq_management命令进行安装</p><p><img src="https://img-blog.csdn.net/20180208141846581?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvd2VpeGluXzM5NzM1OTIz/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="img"></p><p>打开命令行命令行,进入RabbitMQ的安装目录: sbin</p><p>,输入 rabbitmqctl status , 如果出现以下的图，说明安装是成功的，并且说明现在RabbitMQ Server已经启动了,运行正常。</p><p><a href="http://jingyan.baidu.com/album/a17d5285173ce68098c8f2e5.html?picindex=11" target="_blank" rel="noopener"><img src="https://imgsa.baidu.com/exp/w=500/sign=f02f000de2dde711e7d243f697efcef4/b03533fa828ba61e8d9e78274634970a304e5941.jpg" alt="RabbitMQ在windows下的安装"></a></p><p>打开sbin目录，双击rabbitmq-server.bat</p><p><img src="https://img-blog.csdn.net/2018020814402581?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvd2VpeGluXzM5NzM1OTIz/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="img"></p><p>等几秒钟看到这个界面后，访问<a href="http://localhost:15672" target="_blank" rel="noopener">http://localhost:15672</a></p><p><img src="https://img-blog.csdn.net/20180208142631460?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvd2VpeGluXzM5NzM1OTIz/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="img"></p><p>然后可以看到如下界面</p><p><img src="https://img-blog.csdn.net/20180208144226627?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvd2VpeGluXzM5NzM1OTIz/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70" alt="img"></p><p>默认用户名和密码都是guest</p><p>登陆即可。</p>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;h1 id=&quot;Windows安装RabbitMQ&quot;&gt;&lt;a href=&quot;#Windows安装RabbitMQ&quot; class=&quot;headerlink&quot; title=&quot;Windows安装RabbitMQ&quot;&gt;&lt;/a&gt;Windows安装RabbitMQ&lt;/h1&gt;&lt;h4 id=&quot;第一步：下</summary>
+      
+    
+    
+    
+    
+  </entry>
   
   <entry>
     <title>清华开源镜像站的使用</title>
@@ -448,29 +468,6 @@
 &lt;p&gt;有两个推荐的源：&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;清华大学镜像：&lt;a href=&quot;https://links.jianshu.com/go?to=https%3A%2F%2Fmirrors.tuna.tsinghua.e</summary>
-      
-    
-    
-    
-    <category term="树莓派" scheme="https://wicherqaq.github.io/categories/%E6%A0%91%E8%8E%93%E6%B4%BE/"/>
-    
-    
-  </entry>
-  
-  <entry>
-    <title>树莓派安装操作系统</title>
-    <link href="https://wicherqaq.github.io/2020/05/25/%E6%A0%91%E8%8E%93%E6%B4%BE%E5%AE%89%E8%A3%85%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/"/>
-    <id>https://wicherqaq.github.io/2020/05/25/%E6%A0%91%E8%8E%93%E6%B4%BE%E5%AE%89%E8%A3%85%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/</id>
-    <published>2020-05-25T13:49:42.000Z</published>
-    <updated>2020-05-25T14:22:40.000Z</updated>
-    
-    <content type="html"><![CDATA[<h3 id="准备工作"><a href="#准备工作" class="headerlink" title="准备工作"></a>准备工作</h3><p>8G以上Micro SD卡和读卡器，注意SD卡的读写速度直接影响系统的运行速度</p><h3 id="下载官网的最新系统"><a href="#下载官网的最新系统" class="headerlink" title="下载官网的最新系统"></a>下载官网的最新系统</h3><p><a href="www.baidu.com">百度网盘链接（系统镜像和烧录工具）</a></p><p>密码：</p><h3 id="使用win32DiskImager烧录"><a href="#使用win32DiskImager烧录" class="headerlink" title="使用win32DiskImager烧录"></a>使用win32DiskImager烧录</h3><ol><li>选择SD卡</li><li>选择下载好的镜像文件</li><li>点击“写入”</li><li>注意烧录完成后默认是不开启SSH，需要在SD卡根目录中（boot）新建SSH文件无后缀。</li></ol><h3 id="疑问解答"><a href="#疑问解答" class="headerlink" title="疑问解答"></a>疑问解答</h3><p>烧录好的TF卡被分为两个分区：一个FAT32的Boot分区，和一个（或数个）Ext4的Linux主分区。这也是Linux系统的典型需求。</p>]]></content>
-    
-    
-      
-      
-    <summary type="html">&lt;h3 id=&quot;准备工作&quot;&gt;&lt;a href=&quot;#准备工作&quot; class=&quot;headerlink&quot; title=&quot;准备工作&quot;&gt;&lt;/a&gt;准备工作&lt;/h3&gt;&lt;p&gt;8G以上Micro SD卡和读卡器，注意SD卡的读写速度直接影响系统的运行速度&lt;/p&gt;
-&lt;h3 id=&quot;下载官网的最新系统&quot;</summary>
       
     
     
